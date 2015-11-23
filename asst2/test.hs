@@ -13,33 +13,38 @@ eraseSpace input n
     | isSpace (input !! n) && isSpace (input !! (n - 1)) = eraseSpace (deleteN input n) n
     | otherwise = eraseSpace input (n + 1)
 
-list = [1, 1, 1, 1]
-
 getNth :: Int -> Integer
-getNth n = (getNthList list n) !! n
+getNth targetIndex = getNthHelper 1 1 1 1 3 targetIndex
 
-getNthList :: [Integer] -> (Int) -> [Integer]
-getNthList xs n
-    | n < 4 = take (n + 1) list
-    | length xs == n + 1 = xs
-    | otherwise = do let size = length xs
-                     getNthList (xs ++ [(xs !! (size-1) + xs !! (size-2))* xs !! (size-3) `div` xs !! (size-4)]) n
-
+--new getNth
+getNthHelper :: Integer -> Integer -> Integer -> Integer -> Int -> Int -> Integer
+getNthHelper a b c d n targetIndex
+    | targetIndex <= 3 = 1
+    | n == targetIndex = d
+    | otherwise = getNthHelper b c d ((d + c) * b `div` a) (n + 1) targetIndex
 
 getSum :: Int -> Integer
-getSum n = sum (getNthList list n)
+getSum targetIndex = getSumHelper 1 1 1 1 3 targetIndex 4
+
+getSumHelper :: Integer -> Integer -> Integer -> Integer -> Int -> Int -> Integer -> Integer
+getSumHelper a b c d n targetIndex currSum
+    | targetIndex <= 3 = fromIntegral (targetIndex + 1)
+    | n == targetIndex = currSum
+    | otherwise = do
+        let e = ((d + c) * b `div` a)
+        getSumHelper b c d e (n + 1) targetIndex (currSum + e)
 
 getBounds :: Double -> [Integer]
 getBounds number = do
-    let n = getNEqualANumber 0 number
+    let n = getNEqualANumber 1 1 1 1 3 number
     if ((fromIntegral (getNth n)) == number) then [getNth (n - 1), getNth (n + 1)]
-        else [getNth (n - 1), getNth n]
+    else [getNth (n - 1), getNth n]
 
 --getFirstNthBiggerOrEqualANumber
-getNEqualANumber :: Int -> Double -> Int
-getNEqualANumber n number
-    | (fromIntegral (getNth n)) >= number = n
-    | otherwise = getNEqualANumber (n + 1) number
+getNEqualANumber :: Integer -> Integer -> Integer -> Integer -> Int -> Double -> Int
+getNEqualANumber a b c d n targetNum
+    | (fromIntegral d) >= targetNum = n
+    | otherwise = getNEqualANumber b c d ((d + c) * b `div` a) (n + 1) targetNum
 
 parseDouble :: [Char] -> Double
 parseDouble xs = do
