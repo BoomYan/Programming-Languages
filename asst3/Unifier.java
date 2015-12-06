@@ -102,7 +102,6 @@ class FuncType extends FinalType {
 			return false;
 		}
 		if (!isArgList(str.substring(0, j + 1))) {
-			Test.print("not argslist");
 			return false;
 		}
 		if (str.length() <= j + 3) {
@@ -113,7 +112,6 @@ class FuncType extends FinalType {
 		}
 		j = j + 3;
 		if (!Type.isMe(str.substring(j))) {
-			Test.print("return type");
 			return false;
 		}
 		return true;
@@ -138,7 +136,6 @@ class FuncType extends FinalType {
 			}
 		}
 		if (str.length() != (str2.length() + 2 + args.length - 1)) {
-			Test.print("lengthhhhhhh");
 			return false;
 		}
 		if (str.charAt(str.length() - 1) != ')') {
@@ -219,13 +216,13 @@ public class Unifier {
 	//each type either bind to an equal set of types
 	//or bind to a primType
 	private final Map<Type, Set<Type>> setMap;
-	private final Map<Type, PrimType> primMap;
+	private final Map<Type, FinalType> finalMap;
 	
 	public Unifier() {
 		setMap = new HashMap<>();
-		primMap = new HashMap<>();
+		finalMap = new HashMap<>();
 		for (PrimType p : PrimType.TYPES) {
-			primMap.put(p, p);
+			finalMap.put(p, p);
 		}
 	}
 
@@ -244,23 +241,24 @@ public class Unifier {
 			}
 			return;
 		}
-		if (set1 != null && (PrimType.isMe(getType(type2)))) {
-			bind(set1, PrimType.construct(getType(type2)));
+		if (set1 != null && (FinalType.isMe(getType(type2)))) {
+			bind(set1, (FinalType)Type.construct(getType(type2)));
 			return;
 		}
-		if (set2 != null && (PrimType.isMe(getType(type1)))) {
-			bind(set2, PrimType.construct(getType(type1)));
+		if (set2 != null && (FinalType.isMe(getType(type1)))) {
+			bind(set2, (FinalType)Type.construct(getType(type1)));
 			return;
 		}
-		if (type1 instanceof ListType && type2 instanceof ListType) {
-			ListType listType1 = (ListType) type1;
-			ListType listType2 = (ListType) type2;
+
+		if (ListType.isMe(getType(type1)) && ListType.isMe(getType(type2))) {
+			ListType listType1 = (ListType)Type.construct(getType(type1));
+			ListType listType2 = (ListType)Type.construct(getType(type2));
 			unify(listType1.parType, listType2.parType);
 			return;
 		}
-		if (type1 instanceof FuncType && type2 instanceof FuncType) {
-			FuncType funcType1 = (FuncType) type1;
-			FuncType funcType2 = (FuncType) type2;
+		if (FuncType.isMe(getType(type1)) && FuncType.isMe(getType(type2))) {
+			FuncType funcType1 = (FuncType)Type.construct(getType(type1));
+			FuncType funcType2 = (FuncType)Type.construct(getType(type2));
 			if (funcType1.parTypes.size() != funcType2.parTypes.size()) {
 				throw new IllegalArgumentException("Bottom");
 			}
@@ -270,11 +268,7 @@ public class Unifier {
 			unify(funcType1.returnType, funcType2.returnType);
 			return;
 		}
-		//type1 and type2 point to same PrimType
-		if ((PrimType.isMe(getType(type2))) && primMap.get(type1) == PrimType.construct(getType(type2))) {
-			return;
-		}
-		if ((PrimType.isMe(getType(type1))) && primMap.get(type2) == PrimType.construct(getType(type1))) {
+		if (equals(type1, type2)) {
 			return;
 		}
 		throw new IllegalArgumentException("Bottom");
@@ -290,21 +284,26 @@ public class Unifier {
 		}
 	}
 	
-	private void bind (Set<Type> set1, PrimType primType) {
+	private void bind (Set<Type> set1, FinalType finalType) {
 		//bind types in set1 to primType
 		for (Type type : set1) {
-			if (primMap.containsKey(type) && !primMap.get(type).name.equals(primType.name)) {
+			if (finalMap.containsKey(type) && !equals(finalMap.get(type), finalType)) {
 				throw new IllegalArgumentException("BOTTOM");
 			}
 			//update primMap
-			primMap.put(type, primType);
+			finalMap.put(type, finalType);
 			//update setMap
 			setMap.remove(type);
 		}
 	}
 	
+	//actually point to the same Type
+	private boolean equals(Type type1, Type type2) {
+		return getType(type1).equals(getType(type2));
+	}
+	
 	private void constructSet (Type type) {
-		if (!(type instanceof VarType) || setMap.containsKey(type) || primMap.containsKey(type)) {
+		if (!(type instanceof VarType) || setMap.containsKey(type) || finalMap.containsKey(type)) {
 			return;
 		}
 		Set<Type> set = new TreeSet<Type>(new Comparator<Type>(){
@@ -317,6 +316,7 @@ public class Unifier {
 		setMap.put(type,  set);
 	}
 	
+	//for output, convert a type to output String
 	public String getType (Type type) {
 		if (type instanceof VarType) {
 			return getVarType((VarType)type);
@@ -334,13 +334,18 @@ public class Unifier {
 	}
 	
 	public String getVarType (VarType type) {
-		if (primMap.containsKey(type)) {
-			return primMap.get(type).name;
+		if (finalMap.containsKey(type)) {
+			if (finalMap.get(type) instanceof PrimType) {
+				return finalMap.get(type).name;
+			}
+			else {
+				return getType(finalMap.get(type));
+			}
 		}
 		if (setMap.containsKey(type)) {
 			return "`" + setMap.get(type).iterator().next().name;
 		}
-		throw new IllegalArgumentException("BOTTOM");
+		return "`" + type.name;
 	}
 	
 	public String getPrimType (PrimType type) {
@@ -368,14 +373,18 @@ public class Unifier {
 	}
 	
 	
-	@SuppressWarnings("resource")
 	public static void main(String[] args) {
 		Unifier u = new Unifier();
 		while (true) {
-			try {
+			try(Scanner s = new Scanner(System.in)) {
 				Type type1 = null, type2 =null;
-				Scanner s = new Scanner(System.in);
+				if (!s.hasNextLine()) {
+					continue;
+				}
 				String input = s.nextLine();
+				if (input.length() == 0) {
+					continue;
+				}
 		        if (input.equals("QUIT")) {
 		        	return;
 		        }
