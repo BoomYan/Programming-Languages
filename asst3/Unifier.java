@@ -90,8 +90,6 @@ class FinalType extends Type {
 class FuncType extends FinalType {
 	List<Type> parTypes = new ArrayList<>();
 	Type returnType = null;
-	public FuncType() {
-	}
 
 	public static boolean isMe(String str) {
 		if (str == null || str.length() < 5) {
@@ -148,11 +146,14 @@ class FuncType extends FinalType {
 	}
 
 	public static FuncType construct(String str) {
+		//TODO using stack to construct
 		FuncType result = new FuncType();
 		int j = str.indexOf(")");
-		String[] args = str.substring(1, j).split(",");
-		for (String arg : args) {
-			result.parTypes.add(Type.construct(arg));
+		if (j > 1) {
+			String[] args = str.substring(1, j).split(",");
+			for (String arg : args) {
+				result.parTypes.add(Type.construct(arg));
+			}
 		}
 		j = j + 3;
 		result.returnType = Type.construct(str.substring(j));
@@ -234,8 +235,8 @@ public class Unifier {
 			throw new IllegalArgumentException();
 		}
 		//will return if inappropriate
-		constructSet(type1);
-		constructSet(type2);
+		constructEqualSet(type1);
+		constructEqualSet(type2);
 		Set<Type> set1 = setMap.get(type1);
 		Set<Type> set2 = setMap.get(type2);
 		if (set1 != null && set2 != null) {
@@ -305,9 +306,9 @@ public class Unifier {
 		return getType(type1).equals(getType(type2));
 	}
 	
-	private void constructSet (Type type) {
+	private boolean constructEqualSet(Type type) {
 		if (!(type instanceof VarType) || setMap.containsKey(type) || finalMap.containsKey(type)) {
-			return;
+			return false;
 		}
 		Set<Type> set = new TreeSet<Type>(new Comparator<Type>(){
 			@Override
@@ -316,11 +317,27 @@ public class Unifier {
 			}
 		});
 		set.add(type);
-		setMap.put(type,  set);
+		setMap.put(type, set);
+		return true;
+	}
+	
+	//checked for circle
+	Set<Type> gettedTypes = new HashSet<Type>();
+	
+	public String getType(Type type) {
+		if (gettedTypes.contains(type)) {
+			throw new IllegalArgumentException("BOTTOM");
+		}
+		else {
+			gettedTypes.add(type);
+		}
+		String result = getTypeHelper(type);
+		gettedTypes.remove(type);
+		return result;
 	}
 	
 	//for output, convert a type to output String
-	public String getType (Type type) {
+	public String getTypeHelper (Type type) {
 		if (type instanceof VarType) {
 			return getVarType((VarType)type);
 		}
