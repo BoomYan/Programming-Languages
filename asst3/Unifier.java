@@ -1,5 +1,8 @@
 package academicTest;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.*;
 
 import test.Test;
@@ -372,44 +375,52 @@ public class Unifier {
 		return sb.toString();
 	}
 	
-	
 	public static void main(String[] args) {
 		Unifier u = new Unifier();
-		while (true) {
-			try(Scanner s = new Scanner(System.in)) {
-				Type type1 = null, type2 =null;
-				if (!s.hasNextLine()) {
-					continue;
+		BufferedReader reader = null;
+		try {
+			reader = new BufferedReader(new InputStreamReader(System.in));
+			while (true) {
+				try {
+					Type type1 = null, type2 =null;
+					String input = reader.readLine();
+					if (input.length() == 0) {
+						continue;
+					}
+			        if (input.equals("QUIT")) {
+			        	return;
+			        }
+			        String[] types = input.split("&");
+			        if (types.length != 2) {
+			        	throw new IllegalArgumentException("ERR");
+			        }
+			        type1 = Type.construct(types[0]);
+			        type2 = Type.construct(types[1]);
+			        u.unify(type1, type2);
+					Test.print(u.getType(type1));
+				} catch (IllegalArgumentException iae) {
+					Test.print(iae.getMessage());
+					iae.printStackTrace();
+					return;
+				} catch (RuntimeException re) {
+					Test.print("BOTTOM");
+					re.printStackTrace();
+					return;
 				}
-				String input = s.nextLine();
-				if (input.length() == 0) {
-					continue;
+			}
+		} catch (IOException e1) {
+			Test.print("ERR");
+			e1.printStackTrace();
+		} finally {
+			if (reader != null) {
+				try {
+					reader.close();
+				} catch (IOException e) {
+					Test.print("ERR");
+					e.printStackTrace();
 				}
-		        if (input.equals("QUIT")) {
-		        	return;
-		        }
-		        String[] types = input.split("&");
-		        if (types.length != 2) {
-		        	throw new IllegalArgumentException("ERR");
-		        }
-		        type1 = Type.construct(types[0]);
-		        type2 = Type.construct(types[1]);
-		        u.unify(type1, type2);
-				Test.print(u.getType(type1));
-			}
-			catch (IllegalArgumentException iae) {
-				Test.print(iae.getMessage());
-				iae.printStackTrace();
-				return;
-			}
-			catch (RuntimeException re) {
-				Test.print("BOTTOM");
-				re.printStackTrace();
-				return;
 			}
 		}
-
-		
 	}
 
 }
