@@ -13,7 +13,6 @@ abstract class Type {
 
 	
 	public static Type construct(String str) {
-		//TODO: delete all possible spaces in str except those illegal;
 		if (MAP.containsKey(str)) {
 			return MAP.get(str);
 		}
@@ -88,75 +87,78 @@ class FinalType extends Type {
 
 //funcType and listType don't have a name;
 class FuncType extends FinalType {
+	private static char LEFT_BRACE = '(';
+	private static char RIGHT_BRACE = ')';
+	private static char COMMA = ',';
+	private static String ARROW = "->";
+	
 	List<Type> parTypes = new ArrayList<>();
 	Type returnType = null;
-
+	
 	public static boolean isMe(String str) {
-		if (str == null || str.length() < 5) {
-			return false;
-		}
-		int j = 0;
-		while (j < str.length() && str.charAt(j) != ')') {
-			j++;
-		}
-		if (j == str.length()) {
-			return false;
-		}
-		if (!isArgList(str.substring(0, j + 1))) {
-			return false;
-		}
-		if (str.length() <= j + 3) {
-			return false;
-		}
-		if (!str.substring(j + 1, j + 3).equals("->")) {
-			return false;
-		}
-		j = j + 3;
-		if (!Type.isMe(str.substring(j))) {
+		try {
+			FuncType.construct(str);
+		} catch (RuntimeException re) {
 			return false;
 		}
 		return true;
 	}
 	
-	private static boolean isArgList(String str) {
-		if (str == null || str.length() < 2) {
-			return false;
-		}
-		if (str.charAt(0) != '(') {
-			return false;
-		}
-		if (str.length() == 2 && str.charAt(1) == ')') {
-			return true;
-		}
-		String[] args = str.substring(1,str.length() - 1).split(",");
-		String str2 = new String();
-		for (String arg : args) {
-			str2 += arg;
-			if (!Type.isMe(arg)) {
-				return false;
-			}
-		}
-		if (str.length() != (str2.length() + 2 + args.length - 1)) {
-			return false;
-		}
-		if (str.charAt(str.length() - 1) != ')') {
-			return false;
-		}
-		return true;
-	}
-
 	public static FuncType construct(String str) {
-		//TODO using stack to construct
 		FuncType result = new FuncType();
-		int j = str.indexOf(")");
-		if (j > 1) {
-			String[] args = str.substring(1, j).split(",");
-			for (String arg : args) {
-				result.parTypes.add(Type.construct(arg));
+		if (str.charAt(0) != LEFT_BRACE) {
+			throw new IllegalArgumentException();
+		}
+		int level = 0;
+		int i = 0;
+		for (; i < str.length(); i++) {
+			if (str.charAt(i) == LEFT_BRACE) {
+				level++;
+			}
+			if (str.charAt(i) == RIGHT_BRACE) {
+				level--;
+			}
+			if (level == 0) {
+				result.parTypes = constructArgList(str.substring(0, i + 1));
+				break;
 			}
 		}
-		j = j + 3;
-		result.returnType = Type.construct(str.substring(j));
+		if (!str.substring(i + 1, i + 3).equals(ARROW)) {
+			throw new IllegalArgumentException();
+		}
+		i = i + 3;
+		result.returnType = Type.construct(str.substring(i));
+		return result;
+	}
+	
+	//the Argument list has '('')'
+	private static List<Type> constructArgList(String str) {
+		List<Type> result = new ArrayList<>();
+		if (str.charAt(0) != LEFT_BRACE || str.charAt(str.length() - 1) != RIGHT_BRACE) {
+			throw new IllegalArgumentException();
+		}
+		int level = 0;
+		int i = 0;
+		int argStartIndex = 1;
+		for (; i < str.length(); i++) {
+			if (str.charAt(i) == LEFT_BRACE) {
+				level++;
+			}
+			if (str.charAt(i) == RIGHT_BRACE) {
+				level--;
+			}
+			if (level == 1 && str.charAt(i) == COMMA) {
+				//found a argument
+				result.add(Type.construct(str.substring(argStartIndex, i)));
+				argStartIndex = i + 1;
+			}
+			if (level == 0 && i == str.length() - 1) {
+				result.add(Type.construct(str.substring(argStartIndex, i)));
+			}
+		}
+		if (level != 0) {
+			throw new IllegalArgumentException();
+		}
 		return result;
 	}
 }
@@ -218,7 +220,7 @@ public class Unifier {
 	
 	//store binding relation
 	//each type either bind to an equal set of types
-	//or bind to a primType
+	//or bind to a FinalType
 	private final Map<Type, Set<Type>> setMap;
 	private final Map<Type, FinalType> finalMap;
 	
@@ -392,6 +394,11 @@ public class Unifier {
 		return sb.toString();
 	}
 	
+	public static String eliminateSpace(String str) {
+		//TODO
+		return str;
+	}
+	
 	public static void main(String[] args) {
 		Unifier u = new Unifier();
 		BufferedReader reader = null;
@@ -411,8 +418,10 @@ public class Unifier {
 			        if (types.length != 2) {
 			        	throw new IllegalArgumentException("ERR");
 			        }
-			        type1 = Type.construct(types[0]);
-			        type2 = Type.construct(types[1]);
+			        String arg1 = eliminateSpace(types[0]);
+			        String arg2 = eliminateSpace(types[1]);
+			        type1 = Type.construct(arg1);
+			        type2 = Type.construct(arg2);
 			        u.unify(type1, type2);
 					Test.print(u.getType(type1));
 				} catch (IllegalArgumentException iae) {
