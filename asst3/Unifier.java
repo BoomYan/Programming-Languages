@@ -7,6 +7,14 @@ import java.util.*;
 
 import test.Test;
 
+/**
+ * Each <tt>Type</tt> has 2 static methods: 
+ * <p> The <tt>isMe</tt> method is to identify 
+ * which <tt>Type</tt> the input String should be, 
+ * but not necessary to check this string is valid.
+ * <p>The <tt>construct</tt> method is to construct a specific
+ * <tt>Type</tt> from the input String.
+ */
 abstract class Type {
 	
 	private static final Map<String, Type> MAP = new HashMap<>();
@@ -131,6 +139,9 @@ class FuncType extends FinalType {
 		if (str.charAt(0) != LEFT_BRACE || str.charAt(str.length() - 1) != RIGHT_BRACE) {
 			throw new IllegalArgumentException();
 		}
+		if (str.length() == 2) {
+			return result;
+		}
 		int level = 0;
 		int i = 0;
 		int argStartIndex = 1;
@@ -142,7 +153,7 @@ class FuncType extends FinalType {
 				level--;
 			}
 			if (level == 1 && str.charAt(i) == COMMA) {
-				//found a argument
+				//found an argument
 				result.add(Type.construct(str.substring(argStartIndex, i)));
 				argStartIndex = i + 1;
 			}
