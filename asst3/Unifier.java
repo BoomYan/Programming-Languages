@@ -11,7 +11,6 @@ abstract class Type {
 	
 	private static final Map<String, Type> MAP = new HashMap<>();
 
-	
 	public static Type construct(String str) {
 		if (MAP.containsKey(str)) {
 			return MAP.get(str);
@@ -60,12 +59,7 @@ class VarType extends Type {
 		if (str == null || str.length() < 2 || str.charAt(0) != '`') {
 			return false;
 		}
-		for (int i = 1; i < str.length(); i++) {
-			if (!Character.isLetter(str.charAt(i))) {
-				return false;
-			}
-		}
-		return true;
+		return str.matches("`[a-zA-Z]+");
 	}
 
 	public static VarType construct(String str) {
@@ -74,7 +68,7 @@ class VarType extends Type {
 	
 }
 
-class FinalType extends Type {
+abstract class FinalType extends Type {
 	public static boolean isMe(String str) {
 		if (str == null || str.length() == 0) {
 			return false;
@@ -395,8 +389,11 @@ public class Unifier {
 	}
 	
 	public static String eliminateSpace(String str) {
-		//TODO
-		return str;
+		//check invalid space
+		if (str.matches(".*[`_a-zA-Z]+\\s+[a-zA-Z]+.*")) {
+			throw new IllegalArgumentException("SHIT");
+		}
+		return str.replaceAll("\\s+","");
 	}
 	
 	public static void main(String[] args) {
@@ -434,16 +431,16 @@ public class Unifier {
 					return;
 				}
 			}
-		} catch (IOException e1) {
+		} catch (IOException ioe) {
 			Test.print("ERR");
-			e1.printStackTrace();
+			ioe.printStackTrace();
 		} finally {
 			if (reader != null) {
 				try {
 					reader.close();
-				} catch (IOException e) {
+				} catch (IOException ioe) {
 					Test.print("ERR");
-					e.printStackTrace();
+					ioe.printStackTrace();
 				}
 			}
 		}
