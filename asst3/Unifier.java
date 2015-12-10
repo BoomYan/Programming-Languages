@@ -42,10 +42,7 @@ abstract class Type {
 		MAP.put(str, result);
 		return result;
 	}
-	
-	public String name;
 	//used to parse string
-	//if isMe not isMe for all, throw new Exception("ERR")
 	public static boolean isMe(String str) {
 		if (str.length() ==  0) {
 			return false;
@@ -58,22 +55,24 @@ abstract class Type {
 }
 
 class VarType extends Type {
-
-	VarType(String str) {
-		this.name = str.substring(1);
-	}
-
+	
 	public static boolean isMe(String str) {
 		if (str == null || str.length() < 2 || str.charAt(0) != '`') {
 			return false;
 		}
-		return str.matches("`[a-zA-Z]+");
+		return str.matches("`[a-zA-Z][a-zA-Z0-9]*");
 	}
 
 	public static VarType construct(String str) {
 		return new VarType(str);
 	}
+
+	public final String name;
 	
+	VarType(String str) {
+		this.name = str.substring(1);
+	}
+
 }
 
 abstract class FinalType extends Type {
@@ -93,9 +92,6 @@ class FuncType extends FinalType {
 	private static char RIGHT_BRACE = ')';
 	private static char COMMA = ',';
 	private static String ARROW = "->";
-	
-	List<Type> parTypes = new ArrayList<>();
-	Type returnType = null;
 	
 	public static boolean isMe(String str) {
 		try {
@@ -166,6 +162,8 @@ class FuncType extends FinalType {
 		}
 		return result;
 	}
+	public List<Type> parTypes = new ArrayList<>();
+	public Type returnType = null;
 }
 
 class PrimType extends FinalType {
@@ -182,9 +180,6 @@ class PrimType extends FinalType {
 		TYPENAMES.add(new String("real"));
 		TYPENAMES.add(new String("str"));
 	}
-	PrimType (String str) {
-		this.name = str;
-	}
 	public static boolean isMe(String str) {
 		return TYPENAMES.contains(str);
 	}
@@ -192,11 +187,15 @@ class PrimType extends FinalType {
 	public static PrimType construct(String str) {
 		return TYPES.get(TYPENAMES.indexOf(str));
 	}
+	public final String name;
+	PrimType (String str) {
+		this.name = str;
+	}
+
 	
 }
 
 class ListType extends FinalType {
-	Type parType = null;
 
 	public static boolean isMe(String str) {
 		if (str == null || str.length() < 4) {
@@ -219,22 +218,70 @@ class ListType extends FinalType {
 		result.parType = Type.construct(str.substring(1, str.length() - 1));
 		return result;
 	}
+	
+	Type parType = null;
 }
 
 public class Unifier {
 	
+	public static String eliminateSpaces(String str) {
+		//check invalid space
+		if (str.matches(".*[`a-zA-Z0-9]+\\s+[a-zA-Z0-9]+.*")) {
+			throw new IllegalArgumentException("ERR");
+		}
+		return str.replaceAll("\\s+","");
+	}
+	
+	public static void main(String[] args) {
+		Unifier u = new Unifier();
+		try(@SuppressWarnings("resource")
+		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+			boolean continueReading = true; 
+			while (continueReading) {
+				try {
+					Type type1 = null, type2 =null;
+					String input = reader.readLine();
+					if (input.length() == 0) {
+						continue;
+					}
+					input = eliminateSpaces(input);
+			        if (input.equals("QUIT")) {
+			        	return;
+			        }
+			        String[] types = input.split("&");
+			        if (types.length != 2) {
+			        	throw new IllegalArgumentException("ERR");
+			        }
+			        type1 = Type.construct(types[0]);
+			        type2 = Type.construct(types[1]);
+			        u.unify(type1, type2);
+					Test.print(u.getType(type1));
+				} catch (IllegalArgumentException iae) {
+					Test.print(iae.getMessage());
+					iae.printStackTrace();
+					return;
+				} catch (RuntimeException re) {
+					Test.print("SHIT");
+					re.printStackTrace();
+					return;
+				}
+			}
+		} catch (IOException ioe) {
+			Test.print("ERR");
+			ioe.printStackTrace();
+		} 
+	}
+
+	
 	//store binding relation
 	//each type either bind to an equal set of types
 	//or bind to a FinalType
-	private final Map<Type, Set<Type>> setMap;
-	private final Map<Type, FinalType> finalMap;
+	private final Map<VarType, Set<VarType>> setMap;
+	private final Map<VarType, FinalType> finalMap;
 	
 	public Unifier() {
 		setMap = new HashMap<>();
 		finalMap = new HashMap<>();
-		for (PrimType p : PrimType.TYPES) {
-			finalMap.put(p, p);
-		}
 	}
 
 	public void unify (final Type type1, final Type type2) {
@@ -244,8 +291,14 @@ public class Unifier {
 		//will return if inappropriate
 		constructEqualSet(type1);
 		constructEqualSet(type2);
-		Set<Type> set1 = setMap.get(type1);
-		Set<Type> set2 = setMap.get(type2);
+		Set<VarType> set1 = null;
+		Set<VarType> set2 = null;
+		if (type1 instanceof VarType) {
+			set1 = setMap.get((VarType) type1);
+		}
+		if (type2 instanceof VarType) {
+			set2 = setMap.get((VarType) type2);
+		}
 		if (set1 != null && set2 != null) {
 			if (set1 != set2) {
 				bind(set1, set2);
@@ -285,19 +338,19 @@ public class Unifier {
 		throw new IllegalArgumentException("Bottom");
 	}
 	
-	private void bind (Set<Type> set1, Set<Type> set2) {
+	private void bind (Set<VarType> set1, Set<VarType> set2) {
 		set1.addAll(set2);
 		//for c++ can change &set2 to &set1????
-		for (Type type : setMap.keySet()) {
+		for (VarType type : setMap.keySet()) {
 			if (setMap.get(type) == set2) {
 				setMap.put(type, set1);
 			}
 		}
 	}
 	
-	private void bind (Set<Type> set1, FinalType finalType) {
+	private void bind (Set<VarType> set1, FinalType finalType) {
 		//bind types in set1 to primType
-		for (Type type : set1) {
+		for (VarType type : set1) {
 			if (finalMap.containsKey(type) && !equals(finalMap.get(type), finalType)) {
 				throw new IllegalArgumentException("BOTTOM");
 			}
@@ -317,14 +370,14 @@ public class Unifier {
 		if (!(type instanceof VarType) || setMap.containsKey(type) || finalMap.containsKey(type)) {
 			return false;
 		}
-		Set<Type> set = new TreeSet<Type>(new Comparator<Type>(){
+		Set<VarType> set = new TreeSet<VarType>(new Comparator<VarType>(){
 			@Override
-			public int compare(Type o1, Type o2) {
+			public int compare(VarType o1, VarType o2) {
 				return o1.name.compareTo(o2.name);
 			}
 		});
-		set.add(type);
-		setMap.put(type, set);
+		set.add((VarType)type);
+		setMap.put((VarType)type, set);
 		return true;
 	}
 	
@@ -363,7 +416,7 @@ public class Unifier {
 	public String getVarType (VarType type) {
 		if (finalMap.containsKey(type)) {
 			if (finalMap.get(type) instanceof PrimType) {
-				return finalMap.get(type).name;
+				return ((PrimType)finalMap.get(type)).name;
 			}
 			else {
 				return getType(finalMap.get(type));
@@ -399,62 +452,5 @@ public class Unifier {
 		return sb.toString();
 	}
 	
-	public static String eliminateSpace(String str) {
-		//check invalid space
-		if (str.matches(".*[`_a-zA-Z]+\\s+[a-zA-Z]+.*")) {
-			throw new IllegalArgumentException("SHIT");
-		}
-		return str.replaceAll("\\s+","");
-	}
-	
-	public static void main(String[] args) {
-		Unifier u = new Unifier();
-		BufferedReader reader = null;
-		try {
-			reader = new BufferedReader(new InputStreamReader(System.in));
-			while (true) {
-				try {
-					Type type1 = null, type2 =null;
-					String input = reader.readLine();
-					if (input.length() == 0) {
-						continue;
-					}
-			        if (input.equals("QUIT")) {
-			        	return;
-			        }
-			        String[] types = input.split("&");
-			        if (types.length != 2) {
-			        	throw new IllegalArgumentException("ERR");
-			        }
-			        String arg1 = eliminateSpace(types[0]);
-			        String arg2 = eliminateSpace(types[1]);
-			        type1 = Type.construct(arg1);
-			        type2 = Type.construct(arg2);
-			        u.unify(type1, type2);
-					Test.print(u.getType(type1));
-				} catch (IllegalArgumentException iae) {
-					Test.print(iae.getMessage());
-					iae.printStackTrace();
-					return;
-				} catch (RuntimeException re) {
-					Test.print("BOTTOM");
-					re.printStackTrace();
-					return;
-				}
-			}
-		} catch (IOException ioe) {
-			Test.print("ERR");
-			ioe.printStackTrace();
-		} finally {
-			if (reader != null) {
-				try {
-					reader.close();
-				} catch (IOException ioe) {
-					Test.print("ERR");
-					ioe.printStackTrace();
-				}
-			}
-		}
-	}
 
 }
