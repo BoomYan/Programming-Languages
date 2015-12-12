@@ -5,8 +5,8 @@
 #include <map>
 #include <set>
 #include <vector>
-#include <regex>
-#include <unordered_set>
+#include <ctype.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -18,7 +18,7 @@ private:
 
 public:
 	static Type* construct(string str);
-	virtual void f() {}
+	virtual void foo() {}
 	string name;
 	static bool isMe(string str);
 };
@@ -34,7 +34,7 @@ public:
 class FinalType : public Type {
 public:
 	static bool isMe(string str);
-	virtual void f() {}
+	virtual void bar() {}
 };
 
 class FuncType : public FinalType {
@@ -70,15 +70,11 @@ class Unifier {
 private:
 	map<VarType*, set<VarType*>*> setMap;
 	map<VarType*, FinalType*> finalMap;
-	struct classcomp {
-  		bool operator() (const VarType& lhs, const VarType& rhs) const
-  		{return lhs.name.compare(rhs.name);}
-	};
-	set<VarType, classcomp> gettedTypes;
+	set<string> gettedTypes;
 	void bind(set<VarType*>* set1, set<VarType*>* set2);
 	void bind(set<VarType*>* set1, FinalType* finalType);
 	bool equals(Type* type1, Type* type2);
-	void constructEqualSet(Type* type);
+	set<VarType*>* constructEqualSet(Type* type);
 	string getTypeHelper(Type* type);
 	string getVarType (VarType* type);
 	string getPrimType (PrimType* type);
@@ -131,8 +127,15 @@ bool VarType::isMe(string str) {
 	if (str.length() < 2 || str[0] != '`') {
 		return false;
 	}
-	regex r("`[a-zA-Z][a-zA-Z0-9]*");
-	return regex_match(str, r);	
+	if (!isalpha(str[1])) {
+		return false;
+	}
+	for (int i = 2; i < str.length(); i++) {
+		if (!isalnum(str[i])) {
+			return false;
+		}
+	}
+	return true;
 }
 VarType* VarType::construct(string str) {
 	// cout<<"varType construct+" + str<<endl;
@@ -158,12 +161,9 @@ bool FuncType::isMe(string str) {
 	try {
 		construct(str);
 	}
-	catch(const std::runtime_error& re)
-	{
-	    return false;
-	}
 	catch(const std::exception& ex)
 	{
+		 std::cerr << "Error occurred: " << ex.what() << std::endl;
 		return false;
 	}
 	catch(const char * e) {
@@ -277,44 +277,38 @@ ListType* ListType::construct(string str) {
 }
 
 void Unifier::unify(Type* type1, Type* type2) {
-	if (type1 == nullptr || type2 == nullptr) {
-		throw "BOTTOM";
-	}
 	//will return if inappropriate
-	// cout<<"start constructEqualSet"<<endl;
-	constructEqualSet(type1);
-	constructEqualSet(type2);
-	set<VarType*>* set1 = nullptr;
-	set<VarType*>* set2 = nullptr;
-	if (VarType* vt1 = dynamic_cast<VarType*>(type1)) {
-		set1 = setMap[vt1];
-	}
-	if (VarType* vt2 = dynamic_cast<VarType*>(type2)) {
-		set2 = setMap[vt2];
-	}
-	// cout<<"start bind"<<endl;
-	if (set1 != nullptr && set2 != nullptr) {
-		if (set1 != set2) {
+
+	set<VarType*>* set1 = constructEqualSet(type1);
+	set<VarType*>* set2 = constructEqualSet(type2);
+	if (!set1->empty()&& !set2->empty()) {
+		// cout<<"set1 & set2 not empty"<<endl;
+		if (*set1 != *set2) {
+			// cout<<"start bind 2 sets unify"<<endl;
 			bind(set1, set2);
 		}
 		return;
 	}
-	if (set1 != nullptr && (FinalType::isMe(getType(type2)))) {
+	if (!set1->empty() && (FinalType::isMe(getType(type2)))) {
+		// cout<<"start bind finalType in unify"<<endl;
 		bind(set1, dynamic_cast<FinalType*>(Type::construct(getType(type2))));
 		return;
 	}
-	if (set2 != nullptr && (FinalType::isMe(getType(type1)))) {
+	if (!set2->empty() && (FinalType::isMe(getType(type1)))) {
+		// cout<<"start bind finalType in unify"<<endl;
 		bind(set2, dynamic_cast<FinalType*>(Type::construct(getType(type1))));
 		return;
 	}
-
 	if (ListType::isMe(getType(type1)) && ListType::isMe(getType(type2))) {
+		// cout<<"start bind finalType in unify"<<endl;
 		ListType* listType1 = dynamic_cast<ListType*>(Type::construct(getType(type1)));
 		ListType* listType2 = dynamic_cast<ListType*>(Type::construct(getType(type2)));
 		unify(listType1->parType, listType2->parType);
 		return;
 	}
+
 	if (FuncType::isMe(getType(type1)) && FuncType::isMe(getType(type2))) {
+		// cout<<"start bind FuncType in unify"<<endl;
 		FuncType* funcType1 = dynamic_cast<FuncType*>(Type::construct(getType(type1)));
 		FuncType* funcType2 = dynamic_cast<FuncType*>(Type::construct(getType(type2)));
 		if (funcType1->parTypes.size() != funcType2->parTypes.size()) {
@@ -334,17 +328,23 @@ void Unifier::unify(Type* type1, Type* type2) {
 
 void Unifier::bind (set<VarType*>* set1, set<VarType*>* set2) {
 	set1->insert(set2->begin(), set2->end());
+	// cout<<"......................set1 size"<<set1->size()<<endl;
 	//TODO more test cases needed to check if this is right
-	*set2 = *set1;
+	for (set<VarType*>::iterator typeIt = set2->begin(); typeIt != set2->end(); typeIt++) {
+		setMap[*typeIt] = set1;
+	}
 
 }
 void Unifier::bind (set<VarType*>* set1, FinalType* finalType) {
-	for (set<VarType*>::iterator typeIt = set1->begin(); typeIt != set1->end(); ++typeIt) {
+	// cout<<"start bind finalType"<<endl;
+	for (set<VarType*>::iterator typeIt = set1->begin(); typeIt != set1->end(); typeIt++) {
 		if (finalMap.find(*typeIt) != finalMap.end() && !equals(finalMap[*typeIt], finalType)) {
 			throw "BOTTOM";
 		}
+		// cout<<"start update finalMap"<<endl;
 		//update finalMap
 		finalMap[*typeIt] = finalType;
+		// cout<<"start update setMap"<<endl;
 		//update setMap
 		setMap.erase(*typeIt);
 	}
@@ -352,40 +352,52 @@ void Unifier::bind (set<VarType*>* set1, FinalType* finalType) {
 bool Unifier::equals (Type* type1, Type* type2) {
 	return getType(type1) == getType(type2);
 }
-void Unifier::constructEqualSet (Type* type) {
+//construct a new equal set for new vartype, or return existing equal set
+set<VarType*>* Unifier::constructEqualSet (Type* type) {
+	// cout<<"begin constructEqualSet"<<endl;
 	VarType* varType = dynamic_cast<VarType*>(type);
-	if (!varType || setMap.find(varType) != setMap.end() || finalMap.find(varType) != finalMap.end()) {
-		return;
+	set<VarType*>* newSet = new set<VarType*>();
+	if (!varType || finalMap.find(varType) != finalMap.end()) {
+		return newSet;
 	}
-	set<VarType*>* newSet = new set<VarType*>;
+	if (setMap.find(varType) != setMap.end()) {
+		return setMap[varType];
+	}
+	// cout<<"start constructEqualSet for "<<varType->name<<endl;
 	newSet->insert(varType);
 	setMap[varType] = newSet;
-	return;
+	return newSet;
 }
 string Unifier::getType(Type* type) {
-	// cout<<"getting Type"<<endl;
 	if (VarType* vt = dynamic_cast<VarType*>(type)) {
-		if (gettedTypes.find(*vt) != gettedTypes.end()) {
+		// cout<<"getting VarType "<<vt->name<<endl;
+		if (gettedTypes.find(vt->name) != gettedTypes.end()) {
 			throw "BOTTOM";
 		}
-		gettedTypes.insert(*vt);
+		// cout<<"gettedTypes size: before insert"<<gettedTypes.size()<<endl;
+		gettedTypes.insert(vt->name);
 		string result = getTypeHelper(type);
-		gettedTypes.erase(*vt);
-		return result;	
+		gettedTypes.erase(vt->name);
+		// cout<<"gettedTypes size: after erase"<<gettedTypes.size()<<endl;
+		return result;
 	}
 	return getTypeHelper(type);
 }
 string Unifier::getTypeHelper(Type* type) {
 	if (VarType* vt = dynamic_cast<VarType*>(type)) {
+		// cout<<"getting VarType "<<vt->name<<endl;
 		return getVarType(vt);
 	}
 	if (FuncType* vt = dynamic_cast<FuncType*>(type)) {
+		// cout<<"getting FuncType "<<endl;
 		return getFuncType(vt);
 	}
 	if (PrimType* vt = dynamic_cast<PrimType*>(type)) {
+		// cout<<"getting primType "<<vt->name<<endl;
 		return getPrimType(vt);
 	}
 	if (ListType* vt = dynamic_cast<ListType*>(type)) {
+		// cout<<"getting ListType "<<endl;
 		return getListType(vt);
 	}
 	throw "BOTTOM";
@@ -395,7 +407,8 @@ string Unifier::getVarType(VarType* type) {
 		return getType(finalMap[type]);
 	}
 	if (setMap.find(type) != setMap.end()) {
-		return "`" + (*(++(setMap[type]->begin())))->name;
+		// cout<<"gettingVarType and found in setMap and set size is "<<setMap[type]->size()<<endl;
+		return "`" + (*(setMap[type]->begin()))->name;
 	}
 	// cout<<"typename "<< type->name;
 	return "`" + type->name;
@@ -426,20 +439,47 @@ string Unifier::getFuncType(FuncType* funcType) {
 	return result;
 }
 
-vector<std::string> &split(const string &s, char delim, vector<string> &elems) {
+vector<string> split(const string &s, char delim) {
+	vector<string> elems;
     stringstream ss(s);
     string item;
-    while (std::getline(ss, item, delim)) {
+    while (getline(ss, item, delim)) {
         elems.push_back(item);
     }
     return elems;
 }
 
+bool isSpaceOrTab(char a) {
+	return a == ' ' || a == '\t';
+}
 
-vector<string> split(const string &s, char delim) {
-    vector<string> elems;
-    split(s, delim, elems);
-    return elems;
+string eliminateSpaces(string &str) {
+	//check for space
+	bool flag = false;
+	for (int i = 0; i < str.length(); i++) {
+		if (flag && isalnum(str[i])) {
+			if (isSpaceOrTab(str[i - 1])) {
+				throw "ERR";
+			}
+		}
+		if (isalnum(str[i])) {
+			flag = true;
+			continue;
+		}
+		if (!isSpaceOrTab(str[i])) {
+			flag = false;
+		}
+	}
+	for (int i = 0; i < str.length(); i++) {
+		if (str[i] == '`') {
+			if (i == str.length() - 1 || isSpaceOrTab(str[i + 1])) {
+				throw "ERR";
+			}
+		}
+	}
+	str.erase(remove(str.begin(), str.end(), ' '),str.end());
+	str.erase(remove(str.begin(), str.end(), '\t'),str.end());
+	return str;
 }
 
 int main()
@@ -447,8 +487,9 @@ int main()
 	Unifier u = * new Unifier();
 	while (true) {
 		try {
-			string input;
-			getline(cin, input);
+			string rawInput;
+			getline(cin, rawInput);
+			string input = eliminateSpaces(rawInput);
 			if (input.length() == 0) {
 				continue;
 			}
@@ -456,17 +497,14 @@ int main()
 				return 0;
 			}
 			vector<string> types = split(input, '&');
-			if (types.size() != 2) {
+			if (types.size() != 2 || input[input.length() - 1] == '&') {
 				throw "ERR";
 			}
 			Type* type1 = Type::construct(types[0]);
 			Type* type2 = Type::construct(types[1]);
 			u.unify(type1, type2);
+			// cout<<"finished unify"<<endl;
 			cout<<u.getType(type1)<<endl;
-		}
-		catch(const std::runtime_error& re)
-		{
-		    std::cerr << "Runtime error: " << re.what() << std::endl;
 		}
 		catch(const std::exception& ex)
 		{
@@ -474,8 +512,10 @@ int main()
 		}
 		catch(const char * e) {
 			cout<<*e<<endl;
-			return;
+			return 0;
 		}
 	}
 	return 0;
 }
+
+
