@@ -7,6 +7,7 @@
 #include <vector>
 #include <ctype.h>
 #include <algorithm>
+#include <exception>
 
 using namespace std;
 
@@ -161,9 +162,8 @@ bool FuncType::isMe(string str) {
 	try {
 		construct(str);
 	}
-	catch(const std::exception& ex)
+	catch(const exception& ex)
 	{
-		 std::cerr << "Error occurred: " << ex.what() << std::endl;
 		return false;
 	}
 	catch(const char * e) {
@@ -175,7 +175,7 @@ FuncType* FuncType::construct(string str) {
 	FuncType* result = new FuncType();
 	// cout<<"funcType construct start "<<str<<endl;
 	if (str[0] != LEFT_BRACE) {
-		throw "err";
+		throw "ERR";
 	}
 	int level = 0;
 	int i = 0;
@@ -193,7 +193,7 @@ FuncType* FuncType::construct(string str) {
 		}
 	}
 	if (!(str.substr(i + 1, 2) == ARROW)) {
-		throw "err";
+		throw "ERR";
 	}
 	i = i + 3;
 	// cout<<"funcType returnType started  "<<str.substr(i, str.length() - i)<<endl;
@@ -206,7 +206,7 @@ vector<Type*> FuncType::constructArgList(string str) {
 	//TODO
 	vector<Type*> result;
 	if (str[0] != LEFT_BRACE || str[str.length() - 1] != RIGHT_BRACE) {
-		throw "err";
+		throw "ERR";
 	}
 	if (str.length() == 2) {
 		return result;
@@ -227,14 +227,19 @@ vector<Type*> FuncType::constructArgList(string str) {
 			result.push_back(Type::construct(str.substr(argStartIndex, i - argStartIndex)));
 			argStartIndex = i + 1;
 		}
-		if (level == 0 && i == str.length() - 1) {
-			// cout<<"arglist substr "<<str.substr(argStartIndex, i - argStartIndex)<<endl;
-			result.push_back(Type::construct(str.substr(argStartIndex, i - argStartIndex)));
+		if (level == 0) {
+			if (i == str.length() - 1) {
+				// cout<<"arglist substr "<<str.substr(argStartIndex, i - argStartIndex)<<endl;
+				result.push_back(Type::construct(str.substr(argStartIndex, i - argStartIndex)));
+			}
+			else {
+				throw "ERR";
+			}
 		}
 	}
 	// cout<<"arglist finished"<<endl;
 	if (level != 0) {
-		throw "err";
+		throw "ERR";
 	}
 	return result;
 }
@@ -506,12 +511,17 @@ int main()
 			// cout<<"finished unify"<<endl;
 			cout<<u.getType(type1)<<endl;
 		}
-		catch(const std::exception& ex)
+		catch(const exception& ex)
 		{
-		    std::cerr << "Error occurred: " << ex.what() << std::endl;
+		    cout<<"BOTTOM"<<endl;
 		}
 		catch(const char * e) {
-			cout<<*e<<endl;
+			if (*e == 'E') {
+				cout<<"ERR"<<endl;
+			}
+			else {
+				cout<<"BOTTOM"<<endl;
+			}
 			return 0;
 		}
 	}
