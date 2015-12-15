@@ -14,7 +14,8 @@ using namespace std;
 class Type
 {
 private:
-	//hold the value of Type actually
+	//make sure for the same string, will only return same type 
+	//instead of constructing a new type
 	static map<string, Type*> parsedTypeMap;
 
 public:
@@ -99,7 +100,6 @@ bool Type::isMe(string str) {
 }
 
 Type* Type::construct(string str) {
-
 
 	if (parsedTypeMap.find(str) != parsedTypeMap.end()) {
 		return parsedTypeMap[str];
@@ -188,7 +188,7 @@ FuncType* FuncType::construct(string str) {
 			break;
 		}
 	}
-	if (!(str.substr(i + 1, 2) == ARROW)) {
+	if (str.length() <= i + 3 || !(str.substr(i + 1, 2) == ARROW)) {
 		throw "ERR";
 	}
 	i = i + 3;
@@ -300,7 +300,7 @@ void Unifier::unify(Type* type1, Type* type2) {
 		FuncType* funcType1 = dynamic_cast<FuncType*>(Type::construct(getType(type1)));
 		FuncType* funcType2 = dynamic_cast<FuncType*>(Type::construct(getType(type2)));
 		if (funcType1->parTypes.size() != funcType2->parTypes.size()) {
-			throw "Bottom";
+			throw "BOTTOM";
 		}
 		for (int i = 0; i < funcType1->parTypes.size(); i++) {
 			unify((funcType1->parTypes)[i], (funcType2->parTypes)[i]);
@@ -311,7 +311,7 @@ void Unifier::unify(Type* type1, Type* type2) {
 	if (equals(type1, type2)) {
 		return;
 	}
-	throw "Bottom";	
+	throw "BOTTOM";	
 }
 
 void Unifier::bind (set<VarType*>* set1, set<VarType*>* set2) {
@@ -477,6 +477,7 @@ int main()
 		catch(const exception& ex)
 		{
 		    cout<<"BOTTOM"<<endl;
+		    return 0;
 		}
 		catch(const char * e) {
 			if (*e == 'E') {
